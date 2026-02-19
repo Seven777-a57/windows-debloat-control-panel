@@ -1,7 +1,7 @@
 # 🧰 Debloat Control Panel
 **A powerful, modular Windows optimization tool**
 
-In Releases giebt es auch die Deutsche Version.
+In "Releases" giebt es auch die Deutsche Version.
 
 ## 📌 Overview
 The **Debloat Control Panel** is a comprehensive Windows optimization and cleanup tool that disables unnecessary services, blocks telemetry, cleans system files, and frees up several gigabytes of storage. It combines privacy protection, performance tuning, and deep system cleaning into one clear, easy‑to‑use tool — fully automated and documented with transparent logs.
@@ -103,4 +103,5 @@ Cleans numerous system and user directories to free up space:
 <p align="center">
   <img src="screenshots/5.png" width="600">
 </p>
+
 
