@@ -514,7 +514,6 @@ function Set-WmfOldContextMenu {
     Set-ItemProperty "$bg\TaskManager" -Name "Icon" -Value "Taskmgr.exe"
     New-Item "$bg\TaskManager\command" -Force | Out-Null
     Set-ItemProperty "$bg\TaskManager\command" -Name "(default)" -Value "taskmgr.exe"
-}
 
     # --- Windows Tools ---
     New-Item "$bg\WindowsTools" -Force | Out-Null
@@ -564,6 +563,7 @@ function Set-WmfOldContextMenu {
         New-Item -Path $commandKey -Force | Out-Null
         Set-ItemProperty -Path $commandKey -Name "(Default)" -Value $submenu.Command
     }
+}
 
 function Set-WmfSingleClick {
     param($LogBox)
@@ -1618,3 +1618,4 @@ foreach ($Path in $FolderPaths) {
 # ------------------------------------------------------------
 $form.TopMost = $false
 [void]$form.ShowDialog()
+
