@@ -1014,27 +1014,27 @@ foreach ($cat in $categories) {
 $btnRecommended = New-Object System.Windows.Forms.Button
 $btnRecommended.Text     = "Select Recommended Services"
 $btnRecommended.Width    = 250
-$btnRecommended.Location = New-Object System.Drawing.Point(10, 8)
+$btnRecommended.Location = New-Object System.Drawing.Point(10, 5)
+$btnRecommended.BackColor = [System.Drawing.Color]::Orange
 $btnRecommended.Add_Click({ Select-WmfRecommendedServices })
-Set-WmfFlatButton -Button $btnRecommended -BackColor ([System.Drawing.Color]::LightSteelBlue)
 $servicesButtonPanel.Controls.Add($btnRecommended)
 
 # Disable Services
 $btnDisable = New-Object System.Windows.Forms.Button
 $btnDisable.Text     = "Disable Selected Services"
 $btnDisable.Width    = 250
-$btnDisable.Location = New-Object System.Drawing.Point(270, 8)
+$btnDisable.Location = New-Object System.Drawing.Point(270, 5)
+$btnDisable.BackColor = [System.Drawing.Color]::LightCoral
 $btnDisable.Add_Click({ Disable-WmfSelectedServices })
-Set-WmfFlatButton -Button $btnDisable -BackColor ([System.Drawing.Color]::LightCoral)
 $servicesButtonPanel.Controls.Add($btnDisable)
 
 # Enable Services 
 $btnEnable = New-Object System.Windows.Forms.Button
 $btnEnable.Text     = "Enable Selected Services"
 $btnEnable.Width    = 250
-$btnEnable.Location = New-Object System.Drawing.Point(130, 30)
+$btnEnable.Location = New-Object System.Drawing.Point(130, 37)
+$btnEnable.BackColor = [System.Drawing.Color]::lightseagreen
 $btnEnable.Add_Click({ Enable-WmfSelectedServices })
-Set-WmfFlatButton -Button $btnEnable -BackColor ([System.Drawing.Color]::PaleGreen)
 $servicesButtonPanel.Controls.Add($btnEnable)
 
 
@@ -1050,6 +1050,11 @@ $panelDiag.BackColor = $global:WmfBackColor
 Reset-WmfPanelCheckboxY
 
 # Checkboxes 
+$cbRec = $null
+Add-WmfPanelCheckbox -Panel $panelDiag -Text "Disable the controversial Recall function" -OutVariable ([ref]$cbRec)
+
+$cbCop = $null
+Add-WmfPanelCheckbox -Panel $panelDiag -Text "Disable Copilot" -OutVariable ([ref]$cbCop)
 
 $cbAutoLogger = $null
 Add-WmfPanelCheckbox -Panel $panelDiag -Text "Block DiagTrack AutoLogger" -OutVariable ([ref]$cbAutoLogger)
@@ -1093,27 +1098,76 @@ $tabDiag.Controls.Add($btnDiag)
 
 $btnDiag.Add_Click({
     Write-WmfLog -Text "Starting System Protection..." -LogBox $logBox
-#  1**********************************************************************************************	
+	
+#  1********************************************************************************************
+   
+  if ($cbRec.Checked) {
+       
+    $registrySettings = @(
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot"; Name = "DisableAIDataAnalysis"; Value = 1 }
+    )
+    foreach ($reg in $registrySettings) {
+        if (-not (Test-Path $reg.Path)) {
+            New-Item -Path $reg.Path -Force | Out-Null
+        }
+        Set-ItemProperty -Path $reg.Path -Name $reg.Name -Value $reg.Value -Type DWord -Force
+		Write-WmfLog -Text " → Controversial Recall function disabled" -LogBox $logBox
+    }
+} 
+
+#  2********************************************************************************************
+
+if ($cbCop.Checked) {
+    $registrySettings = @(
+        # Copilot Feature deaktivieren
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot"; Name = "TurnOffWindowsCopilot"; Value = 1 },
+        @{ Path = "HKCU:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot"; Name = "TurnOffWindowsCopilot"; Value = 1 },
+        @{ Path = "HKCU:\Software\Microsoft\Windows\Shell\Copilot\BingChat"; Name = "IsUserEligible"; Value = 0 },
+        @{ Path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings"; Name = "AutoOpenCopilotLargeScreens"; Value = 0 },
+        @{ Path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"; Name = "ShowCopilotButton"; Value = 0 },
+        # WICHTIG: Recall explizit deaktivieren
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot"; Name = "DisableAIDataAnalysis"; Value = 1 }
+		Write-WmfLog -Text " → Copilot disabled" -LogBox $logBox
+    )
+
+    foreach ($reg in $registrySettings) {
+        try {
+            if (-not (Test-Path $reg.Path)) {
+                New-Item -Path $reg.Path -Force | Out-Null
+            }
+            Set-ItemProperty -Path $reg.Path -Name $reg.Name -Value $reg.Value -Type DWord -Force
+            Write-Host "Erledigt: $($reg.Name)" -ForegroundColor Green
+        }
+        catch {
+            Write-Warning "Fehler bei $($reg.Name): $($_.Exception.Message)"
+        }
+    }
+	Write-WmfLog -Text " → Copilot disabled" -LogBox $logBox
+}
+
+
+	
+#  3**********************************************************************************************	
     if ($cbAutoLogger.Checked) {
         $autoLoggerDir = "$env:PROGRAMDATA\Microsoft\Diagnosis\ETLLogs\AutoLogger"
         if (Test-Path "$autoLoggerDir\AutoLogger-Diagtrack-Listener.etl") { Remove-Item "$autoLoggerDir\AutoLogger-Diagtrack-Listener.etl" -Force }
         icacls $autoLoggerDir /deny SYSTEM:`(OI`)`(CI`)F | Out-Null
         Write-WmfLog -Text "→ AutoLogger blocked" -LogBox $logBox
     }
-#  2**********************************************************************************************
+#  4**********************************************************************************************
     if ($cbDiag.Checked) {
         Stop-WmfDiagTrackService -LogBox $logBox
         Remove-WmfDiagTrackETL -LogBox $logBox
         Restore-WmfDiagTrackService -LogBox $logBox
 		Write-WmfLog -Text "→ Telemetry data transmission blocked and cleared" -LogBox $logBox
     }
-#  3**********************************************************************************************	
+#  5**********************************************************************************************	
     if ($cbPrivacyDocs.Checked) {
         Set-WmfRegistryValue -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\documentsLibrary" -Name "Value" -Value "Deny" -Type String 
 	    Write-WmfLog -Text "→ Access to documents blocked" -LogBox $logBox
     }
 
-#  4********************************************************************************************
+#  6********************************************************************************************
     if ($cbTyping.Checked) {
         Write-WmfLog -Text " " -LogBox $logBox
         Write-WmfLog -Text " → Disabling text input collection and preventing" -LogBox $logBox
@@ -1134,37 +1188,40 @@ $btnDiag.Add_Click({
         if (!(Test-Path $registryPath)) { New-Item -Path $registryPath -Force | Out-Null }
         Set-ItemProperty -Path $registryPath -Name "AcceptedPrivacyPolicy" -Value 0 -Type DWord
 	}
-#  5********************************************************************************************
+#  7********************************************************************************************
     if ($cbUAC.Checked) {
         Set-WmfRegistryValue -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 0 -Type DWord
 		Write-WmfLog -Text "→ UAC disabled" -LogBox $LogBox
     }
-#  6********************************************************************************************
+	
+#  8********************************************************************************************
     if ($cbSvchost.Checked) {
         $ram = (Get-CimInstance -ClassName Win32_PhysicalMemory | Measure-Object -Property Capacity -Sum).Sum / 1kb
         Set-WmfRegistryValue -Path "HKLM:\SYSTEM\CurrentControlSet\Control" -Name "SvcHostSplitThresholdInKB" -Value $ram -Type DWord
 		Write-WmfLog -Text "→ Telemetry svchost grouping optimized" -LogBox $LogBox
     }
-#  7********************************************************************************************
+	
+#  9********************************************************************************************
     if ($cbDefender.Checked) {
         Set-MpPreference -SubmitSamplesConsent 2 -ErrorAction SilentlyContinue
         Write-WmfLog -Text "→ Defender Sample Submission disabled" -LogBox $logBox
     }
-#  8********************************************************************************************
+	
+#  10********************************************************************************************
     if ($cbDeliveryOpt.Checked) {
         $doPath = "Registry::HKEY_USERS\S-1-5-20\Software\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Settings"
         if (-not (Test-Path $doPath)) { New-Item -Path $doPath -Force | Out-Null }
         Set-WmfRegistryValue -Path $doPath -Name "DODownloadMode" -Value 0 -Type DWord
         Write-WmfLog -Text "→ Delivery Optimization disabled" -LogBox $logBox
     }
-#  9********************************************************************************************
+#  11********************************************************************************************
     if ($cbCDM.Checked) {
         $pathCDM = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
         $settingsCDM = @("ContentDeliveryAllowed", "FeatureManagementEnabled", "OemPreInstalledAppsEnabled", "PreInstalledAppsEnabled", "SilentInstalledAppsEnabled", "SoftLandingEnabled", "SystemPaneSuggestionsEnabled", "SubscribedContent-338387Enabled", "SubscribedContent-338388Enabled", "SubscribedContent-338389Enabled", "SubscribedContent-338393Enabled")
         foreach ($name in $settingsCDM) { if (Test-Path $pathCDM) { Set-ItemProperty -Path $pathCDM -Name $name -Value 0 -ErrorAction SilentlyContinue } }
         Write-WmfLog -Text "→ Content Delivery Manager disabled" -LogBox $logBox
     }
-#  10********************************************************************************************
+#  12********************************************************************************************
     if ($cbOfficeTel.Checked) {
         $versions = @("15.0", "16.0")
         foreach ($v in $versions) {
@@ -1191,6 +1248,44 @@ $tabDiag.Controls.Add($btnDiagUndo)
 $btnDiagUndo.Add_Click({
 
     Write-WmfLog -Text "Starting Undo function..." -LogBox $logBox
+	
+	# 1 Recall Aktivieren	
+$registrySettings = @(
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot"; Name = "DisableAIDataAnalysis"; Value = 0 }
+    )
+    foreach ($reg in $registrySettings) {
+        if (-not (Test-Path $reg.Path)) {
+            New-Item -Path $reg.Path -Force | Out-Null
+        }
+        Set-ItemProperty -Path $reg.Path -Name $reg.Name -Value $reg.Value -Type DWord -Force
+		Write-WmfLog -Text " → Recall function activated" -LogBox $logBox
+    }
+	
+# 2 Copilot Aktivieren	
+    $registrySettings = @(
+        # Copilot Feature deaktivieren
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot"; Name = "TurnOffWindowsCopilot"; Value = 0 },
+        @{ Path = "HKCU:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot"; Name = "TurnOffWindowsCopilot"; Value = 0 },
+        @{ Path = "HKCU:\Software\Microsoft\Windows\Shell\Copilot\BingChat"; Name = "IsUserEligible"; Value = 1 },
+        @{ Path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings"; Name = "AutoOpenCopilotLargeScreens"; Value = 1 },
+        @{ Path = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"; Name = "ShowCopilotButton"; Value = 1 },
+        # WICHTIG: Recall explizit deaktivieren
+        @{ Path = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot"; Name = "DisableAIDataAnalysis"; Value = 0 }
+		Write-WmfLog -Text " → Copilot activated" -LogBox $logBox
+    )
+
+    foreach ($reg in $registrySettings) {
+        try {
+            if (-not (Test-Path $reg.Path)) {
+                New-Item -Path $reg.Path -Force | Out-Null
+            }
+            Set-ItemProperty -Path $reg.Path -Name $reg.Name -Value $reg.Value -Type DWord -Force
+            Write-Host "Erledigt: $($reg.Name)" -ForegroundColor Green
+        }
+        catch {
+            Write-Warning "Fehler bei $($reg.Name): $($_.Exception.Message)"
+        }
+    }
 	
 # 1 DiagTrack Autologger
     # Reset AutoLogger ACL
